@@ -34,7 +34,8 @@ run-shell '/path/to/tmux-harpoon/tmux-harpoon.tmux'
 |---|---|
 | `prefix + H` | Harpoon (bookmark) current window to next free slot |
 | `prefix + M-1` to `prefix + M-9` | Jump to slot 1–9 |
-| `prefix + C-e` | Open interactive harpoon menu (fzf popup) |
+| `prefix + C-e` | Open interactive harpoon menu (inline fzf) |
+| `prefix + C-f` | Open fzf picker in a floating popup (tmux >= 3.2) |
 | `prefix + C-h` | Clear all harpoons |
 
 ### Quick Keys (no prefix required)
@@ -52,6 +53,15 @@ These are enabled by default (`@harpoon-quick-jump on`) for slots 1–5:
 - `Ctrl-D` — delete selected entry
 - `Esc` — close menu
 
+### Picker Controls (fzf popup)
+
+The picker (`prefix + C-f`) opens fzf inside a floating tmux popup:
+
+- `Enter` — jump to selected entry
+- `Ctrl-D` — delete selected entry
+- `Ctrl-A` — add current window to next free slot
+- `Esc` — close picker
+
 ## Configuration
 
 All options are set via tmux options (before TPM loads the plugin):
@@ -59,13 +69,18 @@ All options are set via tmux options (before TPM loads the plugin):
 ```bash
 # Key bindings (prefix-based)
 set -g @harpoon-add-key 'H'         # Key to add current window
-set -g @harpoon-menu-key 'C-e'      # Key to open menu
+set -g @harpoon-menu-key 'C-e'      # Key to open inline menu
+set -g @harpoon-picker-key 'C-f'    # Key to open fzf popup picker
 set -g @harpoon-clear-key 'C-h'     # Key to clear all
 set -g @harpoon-jump-prefix 'M-'    # Prefix for slot keys (M-1..M-9)
 
 # Quick keys (no prefix, on by default)
 set -g @harpoon-quick-jump 'on'     # Enable M-1..5 jump, M-S-1..5 pin
 set -g @harpoon-quick-slots '5'     # Number of quick slots (1-9)
+
+# Picker popup dimensions
+set -g @harpoon-picker-width '60%'  # Popup width (default: 60%)
+set -g @harpoon-picker-height '40%' # Popup height (default: 40%)
 
 # Namespacing: "session" (default), "git" (per git repo), or "global"
 set -g @harpoon-namespace 'session'
@@ -103,7 +118,8 @@ This displays something like: `[1:vim 2:logs 3:tests]`
 ## Dependencies
 
 - `tmux` (obviously)
-- `fzf` (optional, for the interactive popup menu; falls back to `tmux display-menu`)
+- `fzf` (optional, for the interactive menu and popup picker; falls back to `tmux display-menu`)
+- `tmux >= 3.2` (optional, for the floating popup picker; falls back to inline menu)
 - Standard POSIX tools: `bash`, `sed`, `grep`, `cut`, `wc`
 
 ## File Structure
@@ -115,7 +131,8 @@ tmux-harpoon/
 │   ├── helpers.sh             # Shared utility functions
 │   ├── harpoon_add.sh         # Add current window to list
 │   ├── harpoon_jump.sh        # Jump to slot N
-│   ├── harpoon_menu.sh        # Interactive fzf menu
+│   ├── harpoon_menu.sh        # Interactive inline fzf menu
+│   ├── harpoon_picker.sh      # fzf popup picker (tmux display-popup)
 │   ├── harpoon_clear.sh       # Clear all entries
 │   └── harpoon_status.sh      # Status bar segment
 └── README.md

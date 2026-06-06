@@ -33,6 +33,7 @@ get_tmux_option() {
 HARPOON_ADD_KEY=$(get_tmux_option "@harpoon-add-key" "H")
 HARPOON_MENU_KEY=$(get_tmux_option "@harpoon-menu-key" "C-e")
 HARPOON_CLEAR_KEY=$(get_tmux_option "@harpoon-clear-key" "C-h")
+HARPOON_PICKER_KEY=$(get_tmux_option "@harpoon-picker-key" "C-f")
 
 # Jump keys (with prefix): prefix + Alt-1..9 (default) — avoids conflicting with tmux's prefix+1..9 window select
 HARPOON_JUMP_PREFIX=$(get_tmux_option "@harpoon-jump-prefix" "M-")
@@ -64,8 +65,11 @@ for i in $(seq 1 9); do
     tmux bind-key "${HARPOON_JUMP_PREFIX}${i}" run-shell "$SCRIPTS_DIR/harpoon_jump.sh $i"
 done
 
-# Open interactive menu
+# Open interactive menu (inline fzf / display-menu fallback)
 tmux bind-key "$HARPOON_MENU_KEY" run-shell "$SCRIPTS_DIR/harpoon_menu.sh"
+
+# Open fzf picker in a tmux popup (requires fzf + tmux >= 3.2)
+tmux bind-key "$HARPOON_PICKER_KEY" run-shell "$SCRIPTS_DIR/harpoon_picker.sh"
 
 # Clear all harpoons
 tmux bind-key "$HARPOON_CLEAR_KEY" run-shell "$SCRIPTS_DIR/harpoon_clear.sh"

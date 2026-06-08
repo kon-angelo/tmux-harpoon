@@ -31,7 +31,7 @@ build_display_list() {
         local session window_index window_name status_indicator
         session=$(echo "$line" | cut -d: -f1)
         window_index=$(echo "$line" | cut -d: -f2)
-        window_name=$(echo "$line" | cut -d: -f3)
+        window_name=$(echo "$line" | cut -d: -f3-)
 
         if validate_entry "$line"; then
             status_indicator=""
@@ -100,7 +100,7 @@ else
         if [ -z "$line" ]; then
             continue
         fi
-        window_name=$(echo "$line" | cut -d: -f3)
+        window_name=$(echo "$line" | cut -d: -f3-)
         menu_items+=("$i: $window_name" "" "run-shell '$CURRENT_DIR/harpoon_jump.sh $i'")
     done < "$list_file"
 

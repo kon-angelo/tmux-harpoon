@@ -5,7 +5,8 @@
 # tmux-harpoon — fzf popup picker
 #
 # Opens a tmux display-popup with fzf listing all harpooned windows.
-# Supports jump (Enter), delete (Ctrl-D), and pin current window (Ctrl-A).
+# Supports jump (Enter), delete (Ctrl-D), add (Ctrl-A), and
+# move up/down (Ctrl-K/Ctrl-J) to reorder slots.
 #
 # This script is the entry point bound to a key. It launches the popup.
 # The actual fzf selection runs inside the popup via --inner mode.
@@ -14,12 +15,43 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------------------
+# Swap mode: swap two adjacent lines in the list file
+# Usage: harpoon_picker.sh --swap <slot> <direction: up|down>
+# ---------------------------------------------------------------------------
+if [ "$1" = "--swap" ]; then
+    source "$CURRENT_DIR/helpers.sh"
+    list_file=$(get_list_file)
+    slot="$2"
+    direction="$3"
+
+    total_lines=$(wc -l < "$list_file" | tr -d ' ')
+
+    if [ "$direction" = "up" ] && [ "$slot" -gt 1 ]; then
+        target=$((slot - 1))
+    elif [ "$direction" = "down" ] && [ "$slot" -lt "$total_lines" ]; then
+        target=$((slot + 1))
+    else
+        exit 0
+    fi
+
+    # Swap lines using mapfile (portable, no sed -i issues between GNU/BSD)
+    mapfile -t all_lines < "$list_file"
+    tmp="${all_lines[$((slot - 1))]}"
+    all_lines[$((slot - 1))]="${all_lines[$((target - 1))]}"
+    all_lines[$((target - 1))]="$tmp"
+    printf '%s\n' "${all_lines[@]}" > "$list_file"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # Inner mode: runs INSIDE the popup (called by display-popup)
+# Optional: --inner [initial_slot] to pre-select a line after swap
 # ---------------------------------------------------------------------------
 if [ "$1" = "--inner" ]; then
     source "$CURRENT_DIR/helpers.sh"
 
     list_file=$(get_list_file)
+    initial_slot="${2:-}"
 
     if [ ! -f "$list_file" ] || [ ! -s "$list_file" ]; then
         echo "Harpoon: no entries. Press Esc to close."
@@ -27,73 +59,104 @@ if [ "$1" = "--inner" ]; then
         exit 0
     fi
 
-    # Build display list
-    display_list=""
-    i=0
-    while IFS= read -r line; do
-        i=$((i + 1))
-        if [ -z "$line" ]; then
-            display_list="${display_list}${i}: (empty)\n"
-            continue
+    # Loop: re-render after swaps so user sees the updated order
+    while true; do
+        # Build display list
+        display_list=""
+        i=0
+        while IFS= read -r line; do
+            i=$((i + 1))
+            if [ -z "$line" ]; then
+                display_list="${display_list}${i}: (empty)\n"
+                continue
+            fi
+
+            session=$(echo "$line" | cut -d: -f1)
+            window_index=$(echo "$line" | cut -d: -f2)
+            window_name=$(echo "$line" | cut -d: -f3-)
+
+            if validate_entry "$line"; then
+                status_indicator=""
+            else
+                status_indicator=" [stale]"
+            fi
+
+            display_list="${display_list}${i}: ${session}:${window_index} (${window_name})${status_indicator}\n"
+        done < "$list_file"
+
+        # Determine fzf starting position
+        fzf_opts=(
+            --reverse
+            --ansi
+            --header="Enter=jump  C-d=delete  C-a=add  C-k/C-j=move up/down  Esc=close"
+            --prompt="  "
+            --expect="ctrl-d,ctrl-a,ctrl-k,ctrl-j"
+            --no-multi
+            --color="header:italic"
+        )
+
+        if [ -n "$initial_slot" ]; then
+            fzf_opts+=(--query="" --nth=1 --header-first)
+            # Position cursor on the target slot line
+            fzf_opts+=(--scroll-off=0)
         fi
 
-        session=$(echo "$line" | cut -d: -f1)
-        window_index=$(echo "$line" | cut -d: -f2)
-        window_name=$(echo "$line" | cut -d: -f3)
+        selected=$(printf '%b' "$display_list" | grep -v '^$' | fzf "${fzf_opts[@]}")
 
-        if validate_entry "$line"; then
-            status_indicator=""
-        else
-            status_indicator=" [stale]"
+        if [ -z "$selected" ]; then
+            exit 0
         fi
 
-        display_list="${display_list}${i}: ${session}:${window_index} (${window_name})${status_indicator}\n"
-    done < "$list_file"
+        # Parse fzf --expect output: line 1 = key pressed, line 2 = selection
+        key=$(echo "$selected" | head -1)
+        choice=$(echo "$selected" | tail -1)
+        slot_num=$(echo "$choice" | cut -d: -f1 | tr -d ' ')
 
-    # Run fzf
-    selected=$(printf '%b' "$display_list" | grep -v '^$' | fzf \
-        --reverse \
-        --ansi \
-        --header="Harpoon | Enter=jump  Ctrl-D=delete  Ctrl-A=add  Esc=close" \
-        --prompt="  " \
-        --expect="ctrl-d,ctrl-a" \
-        --no-multi \
-        --color="header:italic")
-
-    if [ -z "$selected" ]; then
-        exit 0
-    fi
-
-    # Parse fzf --expect output: line 1 = key pressed, line 2 = selection
-    key=$(echo "$selected" | head -1)
-    choice=$(echo "$selected" | tail -1)
-    slot_num=$(echo "$choice" | cut -d: -f1 | tr -d ' ')
-
-    case "$key" in
-        ctrl-d)
-            # Delete the selected slot
-            if [ -n "$slot_num" ]; then
-                if [[ "$OSTYPE" == darwin* ]]; then
-                    sed -i '' "${slot_num}s|.*||" "$list_file"
-                else
-                    sed -i "${slot_num}s|.*||" "$list_file"
+        case "$key" in
+            ctrl-k)
+                # Move slot up
+                if [ -n "$slot_num" ] && [ "$slot_num" -gt 1 ]; then
+                    "$CURRENT_DIR/harpoon_picker.sh" --swap "$slot_num" up
+                    initial_slot=$((slot_num - 1))
                 fi
-                tmux display-message "Harpoon: removed slot $slot_num"
-            fi
-            ;;
-        ctrl-a)
-            # Add current window to next free slot
-            exec "$CURRENT_DIR/harpoon_add.sh"
-            ;;
-        *)
-            # Jump to the selected slot
-            if [ -n "$slot_num" ]; then
-                exec "$CURRENT_DIR/harpoon_jump.sh" "$slot_num"
-            fi
-            ;;
-    esac
-
-    exit 0
+                # Loop: re-render
+                continue
+                ;;
+            ctrl-j)
+                # Move slot down
+                total_lines=$(wc -l < "$list_file" | tr -d ' ')
+                if [ -n "$slot_num" ] && [ "$slot_num" -lt "$total_lines" ]; then
+                    "$CURRENT_DIR/harpoon_picker.sh" --swap "$slot_num" down
+                    initial_slot=$((slot_num + 1))
+                fi
+                # Loop: re-render
+                continue
+                ;;
+            ctrl-d)
+                # Delete the selected slot
+                if [ -n "$slot_num" ]; then
+                    if [[ "$OSTYPE" == darwin* ]]; then
+                        sed -i '' "${slot_num}s|.*||" "$list_file"
+                    else
+                        sed -i "${slot_num}s|.*||" "$list_file"
+                    fi
+                    tmux display-message "Harpoon: removed slot $slot_num"
+                fi
+                exit 0
+                ;;
+            ctrl-a)
+                # Add current window to next free slot
+                exec "$CURRENT_DIR/harpoon_add.sh"
+                ;;
+            *)
+                # Jump to the selected slot
+                if [ -n "$slot_num" ]; then
+                    exec "$CURRENT_DIR/harpoon_jump.sh" "$slot_num"
+                fi
+                exit 0
+                ;;
+        esac
+    done
 fi
 
 # ---------------------------------------------------------------------------
@@ -114,8 +177,7 @@ if ! command -v fzf &>/dev/null; then
 fi
 
 # Check if tmux supports display-popup (tmux >= 3.2)
-if ! tmux display-popup -h 2>&1 | grep -q "usage"; then
-    # Fallback: run inline (no popup support)
+if ! tmux list-commands 2>/dev/null | grep -q "^display-popup"; then
     tmux display-message "Harpoon: tmux display-popup not available (need tmux >= 3.2). Falling back to menu."
     exec "$CURRENT_DIR/harpoon_menu.sh"
 fi

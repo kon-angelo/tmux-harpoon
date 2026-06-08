@@ -2,25 +2,47 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 kon-angelo
 # ==============================================================================
-# tmux-harpoon — jump to a harpooned slot
+# tmux-harpoon — jump to a harpooned slot (optimized: minimal tmux calls)
 #
 # Usage: harpoon_jump.sh <slot_number>
 # ==============================================================================
 
-CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$CURRENT_DIR/helpers.sh"
-
 slot="$1"
 
 if [ -z "$slot" ]; then
-    display_message "Harpoon: no slot specified"
+    tmux display-message "Harpoon: no slot specified"
     exit 1
 fi
 
-list_file=$(get_list_file)
+# Batch: get session, namespace, data-dir in ONE tmux call using a separator
+_info=$(tmux display-message -p '#S|#{@harpoon-namespace}|#{@harpoon-data-dir}')
+current_session="${_info%%|*}"; _rest="${_info#*|}"
+ns="${_rest%%|*}"; ns="${ns:-session}"
+data_dir="${_rest#*|}"; data_dir="${data_dir:-$HOME/.local/share/tmux-harpoon}"
+
+# Resolve list file path
+case "$ns" in
+    git)
+        pane_path=$(tmux display-message -p '#{pane_current_path}')
+        git_root=$(cd "$pane_path" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
+        if [ -n "$git_root" ]; then
+            ns_key=$(echo "$git_root" | tr '/' '_' | sed 's/^_//')
+        else
+            ns_key="$current_session"
+        fi
+        ;;
+    global)
+        ns_key="global"
+        ;;
+    *)
+        ns_key="$current_session"
+        ;;
+esac
+ns_key=$(echo "$ns_key" | tr ' /:' '___')
+list_file="${data_dir}/${ns_key}.list"
 
 if [ ! -f "$list_file" ]; then
-    display_message "Harpoon: no entries (slot $slot is empty)"
+    tmux display-message "Harpoon: slot $slot is empty"
     exit 1
 fi
 
@@ -28,18 +50,17 @@ fi
 entry=$(sed -n "${slot}p" "$list_file")
 
 if [ -z "$entry" ]; then
-    display_message "Harpoon: slot $slot is empty"
+    tmux display-message "Harpoon: slot $slot is empty"
     exit 1
 fi
 
-session=$(echo "$entry" | cut -d: -f1)
-window_index=$(echo "$entry" | cut -d: -f2)
-window_name=$(echo "$entry" | cut -d: -f3)
+session="${entry%%:*}"; _rest="${entry#*:}"
+window_index="${_rest%%:*}"
 
-# Validate that the target still exists
-if ! validate_entry "$entry"; then
-    display_message "Harpoon: slot $slot stale (${session}:${window_name} gone) — removing"
-    # Remove the stale entry (replace with empty line to preserve slot numbering)
+# Validate: check if window exists (single tmux call, skip has-session)
+if ! tmux list-windows -t "$session" -F '#I' 2>/dev/null | grep -q "^${window_index}$"; then
+    window_name="${_rest#*:}"
+    tmux display-message "Harpoon: slot $slot stale (${session}:${window_name} gone) — removing"
     if [[ "$OSTYPE" == darwin* ]]; then
         sed -i '' "${slot}s|.*||" "$list_file"
     else
@@ -49,12 +70,8 @@ if ! validate_entry "$entry"; then
 fi
 
 # Jump to the target
-current_session=$(tmux display-message -p '#S')
-
 if [ "$session" = "$current_session" ]; then
-    # Same session: just select the window
     tmux select-window -t "${session}:${window_index}"
 else
-    # Different session: switch client then select window
     tmux switch-client -t "${session}:${window_index}"
 fi

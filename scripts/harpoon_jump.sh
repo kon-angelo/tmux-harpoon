@@ -56,11 +56,24 @@ fi
 
 session="${entry%%:*}"; _rest="${entry#*:}"
 window_index="${_rest%%:*}"
+window_name="${_rest#*:}"
 
 # Validate: check if window exists (single tmux call, skip has-session)
-if ! tmux list-windows -t "$session" -F '#I' 2>/dev/null | grep -q "^${window_index}$"; then
-    window_name="${_rest#*:}"
+_windows=$(tmux list-windows -t "$session" -F '#I:#W' 2>/dev/null)
+if ! echo "$_windows" | grep -q "^${window_index}:"; then
     tmux display-message "Harpoon: slot $slot stale (${session}:${window_name} gone) — removing"
+    if [[ "$OSTYPE" == darwin* ]]; then
+        sed -i '' "${slot}s|.*||" "$list_file"
+    else
+        sed -i "${slot}s|.*||" "$list_file"
+    fi
+    exit 1
+fi
+
+# Validate: check if window name still matches (detect index reuse after close)
+_actual_name=$(echo "$_windows" | grep "^${window_index}:" | cut -d: -f2-)
+if [ "$_actual_name" != "$window_name" ]; then
+    tmux display-message "Harpoon: slot $slot stale (window ${window_index} is now '${_actual_name}', expected '${window_name}') — removing"
     if [[ "$OSTYPE" == darwin* ]]; then
         sed -i '' "${slot}s|.*||" "$list_file"
     else

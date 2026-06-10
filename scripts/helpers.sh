@@ -86,21 +86,31 @@ current_window_entry() {
 # ---------------------------------------------------------------------------
 # validate_entry — check if a harpooned entry still exists
 # Returns 0 if valid, 1 if stale
+# Validates session exists, window index exists, AND window name matches
 # ---------------------------------------------------------------------------
 validate_entry() {
     local entry="$1"
-    local session window_index
+    local session window_index window_name
 
     session=$(echo "$entry" | cut -d: -f1)
     window_index=$(echo "$entry" | cut -d: -f2)
+    window_name=$(echo "$entry" | cut -d: -f3-)
 
     # Check if the session exists
     if ! tmux has-session -t "$session" 2>/dev/null; then
         return 1
     fi
 
-    # Check if the window exists in that session
-    if ! tmux list-windows -t "$session" -F '#I' 2>/dev/null | grep -q "^${window_index}$"; then
+    # Check if the window exists in that session AND name matches
+    local actual_name
+    actual_name=$(tmux list-windows -t "$session" -F '#I:#W' 2>/dev/null | grep "^${window_index}:" | cut -d: -f2-)
+    if [ -z "$actual_name" ]; then
+        # Window index does not exist
+        return 1
+    fi
+
+    if [ "$actual_name" != "$window_name" ]; then
+        # Window index exists but name changed (index was reused)
         return 1
     fi
 

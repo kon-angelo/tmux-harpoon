@@ -42,12 +42,29 @@ mkdir -p "$(dirname "$list_file")"
 touch "$list_file"
 
 entry="${current_session}:${window_index}:${window_name}"
+entry_prefix="${current_session}:${window_index}:"
 
-# Check if this window is already in the list (only block if no explicit slot given)
-if [ -z "$slot" ] && grep -qF "$entry" "$list_file" 2>/dev/null; then
-    local_slot=$(grep -nF "$entry" "$list_file" | head -1 | cut -d: -f1)
-    tmux display-message "Harpoon: already at slot $local_slot — ${window_name}"
-    exit 0
+# Check if this session:window_index is already in the list (match by prefix, not exact name)
+# This catches both exact duplicates AND stale entries where window name changed (index reuse)
+if [ -z "$slot" ]; then
+    existing_line=$(grep -n "^${entry_prefix}" "$list_file" 2>/dev/null | head -1)
+    if [ -n "$existing_line" ]; then
+        local_slot="${existing_line%%:*}"
+        existing_entry="${existing_line#*:}"
+        if [ "$existing_entry" = "$entry" ]; then
+            # Exact match — already pinned
+            tmux display-message "Harpoon: already at slot $local_slot — ${window_name}"
+            exit 0
+        else
+            # Same session:window_index but different name — update in place
+            mapfile -t all_lines < "$list_file"
+            all_lines[$((local_slot - 1))]="$entry"
+            printf '%s\n' "${all_lines[@]}" > "$list_file"
+            old_name="${existing_entry#*:*:}"
+            tmux display-message "Harpoon: updated slot $local_slot — ${old_name} → ${window_name}"
+            exit 0
+        fi
+    fi
 fi
 
 if [ -n "$slot" ] && [ "$slot" -ge 1 ] 2>/dev/null; then
@@ -60,8 +77,9 @@ if [ -n "$slot" ] && [ "$slot" -ge 1 ] 2>/dev/null; then
         total_lines=$((total_lines + 1))
     done
 
-    # Check if current window already occupies a different slot
-    existing_slot=$(grep -nF "$entry" "$list_file" 2>/dev/null | head -1 | cut -d: -f1)
+    # Check if current window (session:window_index) already occupies a different slot
+    # Use prefix match to catch entries with stale names for same window
+    existing_slot=$(grep -n "^${entry_prefix}" "$list_file" 2>/dev/null | head -1 | cut -d: -f1)
 
     # Read what's currently in the target slot
     mapfile -t all_lines < "$list_file"

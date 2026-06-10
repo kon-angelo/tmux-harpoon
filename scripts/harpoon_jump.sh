@@ -4,6 +4,9 @@
 # ==============================================================================
 # tmux-harpoon — jump to a harpooned slot (optimized: minimal tmux calls)
 #
+# Entry format: session_name:@window_id:window_name
+# The window_id (@N) is a stable tmux identifier immune to renumber-windows.
+#
 # Usage: harpoon_jump.sh <slot_number>
 # ==============================================================================
 
@@ -55,12 +58,11 @@ if [ -z "$entry" ]; then
 fi
 
 session="${entry%%:*}"; _rest="${entry#*:}"
-window_index="${_rest%%:*}"
+window_id="${_rest%%:*}"
 window_name="${_rest#*:}"
 
-# Validate: check if window exists (single tmux call, skip has-session)
-_windows=$(tmux list-windows -t "$session" -F '#I:#W' 2>/dev/null)
-if ! echo "$_windows" | grep -q "^${window_index}:"; then
+# Validate: check if window_id still exists (tmux select-window -t @id will fail if not)
+if ! tmux list-windows -t "$session" -F '#{window_id}' 2>/dev/null | grep -q "^${window_id}$"; then
     tmux display-message "Harpoon: slot $slot stale (${session}:${window_name} gone) — removing"
     if [[ "$OSTYPE" == darwin* ]]; then
         sed -i '' "${slot}s|.*||" "$list_file"
@@ -70,21 +72,9 @@ if ! echo "$_windows" | grep -q "^${window_index}:"; then
     exit 1
 fi
 
-# Validate: check if window name still matches (detect index reuse after close)
-_actual_name=$(echo "$_windows" | grep "^${window_index}:" | cut -d: -f2-)
-if [ "$_actual_name" != "$window_name" ]; then
-    tmux display-message "Harpoon: slot $slot stale (window ${window_index} is now '${_actual_name}', expected '${window_name}') — removing"
-    if [[ "$OSTYPE" == darwin* ]]; then
-        sed -i '' "${slot}s|.*||" "$list_file"
-    else
-        sed -i "${slot}s|.*||" "$list_file"
-    fi
-    exit 1
-fi
-
-# Jump to the target
+# Jump to the target using the stable window_id
 if [ "$session" = "$current_session" ]; then
-    tmux select-window -t "${session}:${window_index}"
+    tmux select-window -t "${window_id}"
 else
-    tmux switch-client -t "${session}:${window_index}"
+    tmux switch-client -t "${session}:${window_id}"
 fi

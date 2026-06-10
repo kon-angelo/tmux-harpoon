@@ -4,6 +4,8 @@
 # ==============================================================================
 # tmux-harpoon — interactive harpoon menu
 #
+# Entry format: session_name:@window_id:window_name
+#
 # Shows all harpooned entries in an fzf popup (or tmux choose-tree fallback).
 # Allows jumping to, removing, or reordering entries.
 # ==============================================================================
@@ -28,9 +30,9 @@ build_display_list() {
             continue
         fi
 
-        local session window_index window_name status_indicator
+        local session window_id window_name status_indicator
         session=$(echo "$line" | cut -d: -f1)
-        window_index=$(echo "$line" | cut -d: -f2)
+        window_id=$(echo "$line" | cut -d: -f2)
         window_name=$(echo "$line" | cut -d: -f3-)
 
         if validate_entry "$line"; then
@@ -39,7 +41,7 @@ build_display_list() {
             status_indicator=" [stale]"
         fi
 
-        echo "$i: ${session}:${window_index} (${window_name})${status_indicator}"
+        echo "$i: ${session}:${window_name}${status_indicator}"
     done < "$list_file"
 }
 

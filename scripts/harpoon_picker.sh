@@ -72,7 +72,6 @@ if [ "$1" = "--inner" ]; then
             fi
 
             session=$(echo "$line" | cut -d: -f1)
-            window_index=$(echo "$line" | cut -d: -f2)
             window_name=$(echo "$line" | cut -d: -f3-)
 
             if validate_entry "$line"; then
@@ -81,7 +80,7 @@ if [ "$1" = "--inner" ]; then
                 status_indicator=" [stale]"
             fi
 
-            display_list="${display_list}${i}: ${session}:${window_index} (${window_name})${status_indicator}\n"
+            display_list="${display_list}${i}: ${session}:${window_name}${status_indicator}\n"
         done < "$list_file"
 
         # Determine fzf starting position

@@ -4,15 +4,18 @@
 # ==============================================================================
 # tmux-harpoon — add current window to the harpoon list (optimized)
 #
+# Entry format: session_name:@window_id:window_name
+# The window_id (@N) is a stable tmux identifier immune to renumber-windows.
+#
 # Usage: harpoon_add.sh [slot_number]
 #   If slot_number is given, replaces that slot. Otherwise appends to the list.
 # ==============================================================================
 
 slot="$1"
 
-# Batch: get session, window index, window name, namespace, data-dir in ONE call
-_info=$(tmux display-message -p '#S|#I|#W|#{@harpoon-namespace}|#{@harpoon-data-dir}')
-IFS='|' read -r current_session window_index window_name ns data_dir <<< "$_info"
+# Batch: get session, window id, window name, namespace, data-dir in ONE call
+_info=$(tmux display-message -p '#S|#{window_id}|#W|#{@harpoon-namespace}|#{@harpoon-data-dir}')
+IFS='|' read -r current_session window_id window_name ns data_dir <<< "$_info"
 ns="${ns:-session}"
 data_dir="${data_dir:-$HOME/.local/share/tmux-harpoon}"
 
@@ -41,11 +44,11 @@ list_file="${data_dir}/${ns_key}.list"
 mkdir -p "$(dirname "$list_file")"
 touch "$list_file"
 
-entry="${current_session}:${window_index}:${window_name}"
-entry_prefix="${current_session}:${window_index}:"
+entry="${current_session}:${window_id}:${window_name}"
+entry_prefix="${current_session}:${window_id}:"
 
-# Check if this session:window_index is already in the list (match by prefix, not exact name)
-# This catches both exact duplicates AND stale entries where window name changed (index reuse)
+# Check if this session:window_id is already in the list (match by prefix, not exact name)
+# This catches both exact duplicates AND entries where window was renamed
 if [ -z "$slot" ]; then
     existing_line=$(grep -n "^${entry_prefix}" "$list_file" 2>/dev/null | head -1)
     if [ -n "$existing_line" ]; then
@@ -56,7 +59,7 @@ if [ -z "$slot" ]; then
             tmux display-message "Harpoon: already at slot $local_slot — ${window_name}"
             exit 0
         else
-            # Same session:window_index but different name — update in place
+            # Same session:window_id but different name — update in place
             mapfile -t all_lines < "$list_file"
             all_lines[$((local_slot - 1))]="$entry"
             printf '%s\n' "${all_lines[@]}" > "$list_file"
@@ -77,7 +80,7 @@ if [ -n "$slot" ] && [ "$slot" -ge 1 ] 2>/dev/null; then
         total_lines=$((total_lines + 1))
     done
 
-    # Check if current window (session:window_index) already occupies a different slot
+    # Check if current window (session:window_id) already occupies a different slot
     # Use prefix match to catch entries with stale names for same window
     existing_slot=$(grep -n "^${entry_prefix}" "$list_file" 2>/dev/null | head -1 | cut -d: -f1)
 

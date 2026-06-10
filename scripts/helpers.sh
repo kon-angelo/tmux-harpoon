@@ -3,6 +3,9 @@
 # Copyright (c) 2026 kon-angelo
 # ==============================================================================
 # tmux-harpoon — shared helpers (sourced by all scripts)
+#
+# Entry format: session_name:@window_id:window_name
+# The window_id (@N) is a stable tmux identifier immune to renumber-windows.
 # ==============================================================================
 
 # Resolve the data directory
@@ -73,44 +76,36 @@ get_entry_count() {
 
 # ---------------------------------------------------------------------------
 # current_window_entry — returns the entry for the current window
-# Format: session_name:window_index:window_name
+# Format: session_name:@window_id:window_name
 # ---------------------------------------------------------------------------
 current_window_entry() {
-    local session window_index window_name
+    local session window_id window_name
     session=$(tmux display-message -p '#S')
-    window_index=$(tmux display-message -p '#I')
+    window_id=$(tmux display-message -p '#{window_id}')
     window_name=$(tmux display-message -p '#W')
-    echo "${session}:${window_index}:${window_name}"
+    echo "${session}:${window_id}:${window_name}"
 }
 
 # ---------------------------------------------------------------------------
 # validate_entry — check if a harpooned entry still exists
 # Returns 0 if valid, 1 if stale
-# Validates session exists, window index exists, AND window name matches
+# Validates session exists and window_id exists in that session.
+# Window IDs are stable — if the ID exists, the window is the same one.
 # ---------------------------------------------------------------------------
 validate_entry() {
     local entry="$1"
-    local session window_index window_name
+    local session window_id
 
     session=$(echo "$entry" | cut -d: -f1)
-    window_index=$(echo "$entry" | cut -d: -f2)
-    window_name=$(echo "$entry" | cut -d: -f3-)
+    window_id=$(echo "$entry" | cut -d: -f2)
 
     # Check if the session exists
     if ! tmux has-session -t "$session" 2>/dev/null; then
         return 1
     fi
 
-    # Check if the window exists in that session AND name matches
-    local actual_name
-    actual_name=$(tmux list-windows -t "$session" -F '#I:#W' 2>/dev/null | grep "^${window_index}:" | cut -d: -f2-)
-    if [ -z "$actual_name" ]; then
-        # Window index does not exist
-        return 1
-    fi
-
-    if [ "$actual_name" != "$window_name" ]; then
-        # Window index exists but name changed (index was reused)
+    # Check if the window_id exists in that session
+    if ! tmux list-windows -t "$session" -F '#{window_id}' 2>/dev/null | grep -q "^${window_id}$"; then
         return 1
     fi
 

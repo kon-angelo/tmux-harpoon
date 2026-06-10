@@ -4,6 +4,8 @@
 # ==============================================================================
 # tmux-harpoon — status bar segment
 #
+# Entry format: session_name:@window_id:window_name
+#
 # Outputs a condensed view of harpoon slots for embedding in tmux status bar.
 # Example output: "[1:vim 2:logs 3:tests]"
 #

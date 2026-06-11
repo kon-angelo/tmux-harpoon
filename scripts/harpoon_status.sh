@@ -31,7 +31,7 @@ while IFS= read -r line; do
         continue
     fi
 
-    window_name=$(echo "$line" | cut -d: -f3)
+    window_name=$(echo "$line" | cut -d: -f3-)
     # Truncate long names
     if [ ${#window_name} -gt 8 ]; then
         window_name="${window_name:0:7}…"

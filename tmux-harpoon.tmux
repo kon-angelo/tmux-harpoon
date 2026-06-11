@@ -74,22 +74,32 @@ tmux bind-key "$HARPOON_CLEAR_KEY" run-shell "$SCRIPTS_DIR/harpoon_clear.sh"
 # No-prefix quick keys (M-1..5 to jump, M-S-1..5 to pin)
 # ---------------------------------------------------------------------------
 if [ "$HARPOON_QUICK_JUMP" = "on" ]; then
-    # Shift+Alt+number resolves differently depending on whether tmux runs
-    # with `extended-keys on` (CSI u / modifyOtherKeys) or off:
-    #   - extended-keys off → tmux sees the shifted character: M-! M-@ M-# M-$ M-%
-    #   - extended-keys on  → tmux sees the abstract chord:   M-S-1 M-S-2 …
-    # Bind both forms so the pin keys work in either mode and across keyboard
-    # layouts (e.g. German QWERTZ, where Shift+2 is " not @).
-    SHIFTED_KEYS=('M-!' 'M-@' 'M-#' 'M-$' 'M-%' 'M-^' 'M-&' 'M-*' 'M-(')
+    # Shift+Alt+digit produces three different canonical names depending on
+    # how tmux negotiates with the terminal (extended-keys, CSI-u, etc):
+    #
+    #   - extended-keys off   → tmux sees the shifted glyph:    M-!   M-@ …
+    #   - extended-keys on    → shifted glyph + Shift modifier: M-S-! M-S-@ …
+    #   - CSI-u from terminal → digit + Shift modifier:         M-S-1 M-S-2 …
+    #
+    # The canonical form depends on the terminal's protocol response, not on
+    # the user's tmux setting alone, so we bind all three forms and let
+    # whichever one tmux actually receives match. Same action either way.
+    # Layout-dependent: works for US/QWERTY and DE/QWERTZ where Shift+1..5
+    # produce !@#$%; will need adjustment for layouts with different shifted
+    # glyphs.
+    SHIFTED_GLYPHS=('!' '@' '#' '$' '%' '^' '&' '*' '(')
 
     for i in $(seq 1 "$HARPOON_QUICK_SLOTS"); do
         # M-1..M-N (no prefix) → jump to slot
         tmux bind-key -n "M-${i}" run-shell "$SCRIPTS_DIR/harpoon_jump.sh $i"
 
-        # M-S-1..M-S-N (no prefix, shifted) → pin current window to slot
         idx=$((i - 1))
-        tmux bind-key -n "${SHIFTED_KEYS[$idx]}" run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
-        tmux bind-key -n "M-S-${i}" run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
+        glyph="${SHIFTED_GLYPHS[$idx]}"
+
+        # Pin current window to slot N. Bind all three encodings.
+        tmux bind-key -n "M-${glyph}"   run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
+        tmux bind-key -n "M-S-${glyph}" run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
+        tmux bind-key -n "M-S-${i}"     run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
     done
 fi
 

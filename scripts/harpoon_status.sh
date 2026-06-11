@@ -16,9 +16,9 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$CURRENT_DIR/helpers.sh"
 
-list_file=$(get_list_file)
+resolve_harpoon_context
 
-if [ ! -f "$list_file" ] || [ ! -s "$list_file" ]; then
+if [ ! -f "$H_LIST_FILE" ] || [ ! -s "$H_LIST_FILE" ]; then
     exit 0
 fi
 
@@ -41,7 +41,7 @@ while IFS= read -r line; do
         output="${output} "
     fi
     output="${output}${i}:${window_name}"
-done < "$list_file"
+done < "$H_LIST_FILE"
 
 if [ -n "$output" ]; then
     echo "[${output}]"

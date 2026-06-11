@@ -8,11 +8,11 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$CURRENT_DIR/helpers.sh"
 
-list_file=$(get_list_file)
+resolve_harpoon_context
 
-if [ -f "$list_file" ]; then
+if [ -f "$H_LIST_FILE" ]; then
     count=$(get_entry_count)
-    : > "$list_file"
+    : > "$H_LIST_FILE"
     display_message "Harpoon: cleared $count entries"
 else
     display_message "Harpoon: nothing to clear"

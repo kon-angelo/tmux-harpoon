@@ -31,7 +31,6 @@ get_tmux_option() {
 
 # Key bindings
 HARPOON_ADD_KEY=$(get_tmux_option "@harpoon-add-key" "H")
-HARPOON_MENU_KEY=$(get_tmux_option "@harpoon-menu-key" "C-e")
 HARPOON_CLEAR_KEY=$(get_tmux_option "@harpoon-clear-key" "C-h")
 HARPOON_PICKER_KEY=$(get_tmux_option "@harpoon-picker-key" "C-f")
 
@@ -65,10 +64,7 @@ for i in $(seq 1 9); do
     tmux bind-key "${HARPOON_JUMP_PREFIX}${i}" run-shell "$SCRIPTS_DIR/harpoon_jump.sh $i"
 done
 
-# Open interactive menu (inline fzf / display-menu fallback)
-tmux bind-key "$HARPOON_MENU_KEY" run-shell "$SCRIPTS_DIR/harpoon_menu.sh"
-
-# Open fzf picker in a tmux popup (requires fzf + tmux >= 3.2)
+# Open interactive fzf picker in a floating popup
 tmux bind-key "$HARPOON_PICKER_KEY" run-shell "$SCRIPTS_DIR/harpoon_picker.sh"
 
 # Clear all harpoons
@@ -78,8 +74,12 @@ tmux bind-key "$HARPOON_CLEAR_KEY" run-shell "$SCRIPTS_DIR/harpoon_clear.sh"
 # No-prefix quick keys (M-1..5 to jump, M-S-1..5 to pin)
 # ---------------------------------------------------------------------------
 if [ "$HARPOON_QUICK_JUMP" = "on" ]; then
-    # Shift+Alt+number produces shifted characters in tmux:
-    # M-! M-@ M-# M-$ M-%  for slots 1 2 3 4 5
+    # Shift+Alt+number resolves differently depending on whether tmux runs
+    # with `extended-keys on` (CSI u / modifyOtherKeys) or off:
+    #   - extended-keys off → tmux sees the shifted character: M-! M-@ M-# M-$ M-%
+    #   - extended-keys on  → tmux sees the abstract chord:   M-S-1 M-S-2 …
+    # Bind both forms so the pin keys work in either mode and across keyboard
+    # layouts (e.g. German QWERTZ, where Shift+2 is " not @).
     SHIFTED_KEYS=('M-!' 'M-@' 'M-#' 'M-$' 'M-%' 'M-^' 'M-&' 'M-*' 'M-(')
 
     for i in $(seq 1 "$HARPOON_QUICK_SLOTS"); do
@@ -89,6 +89,7 @@ if [ "$HARPOON_QUICK_JUMP" = "on" ]; then
         # M-S-1..M-S-N (no prefix, shifted) → pin current window to slot
         idx=$((i - 1))
         tmux bind-key -n "${SHIFTED_KEYS[$idx]}" run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
+        tmux bind-key -n "M-S-${i}" run-shell "$SCRIPTS_DIR/harpoon_add.sh $i"
     done
 fi
 

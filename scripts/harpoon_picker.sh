@@ -13,14 +13,15 @@
 # ==============================================================================
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$CURRENT_DIR/helpers.sh"
 
 # ---------------------------------------------------------------------------
 # Swap mode: swap two adjacent lines in the list file
 # Usage: harpoon_picker.sh --swap <slot> <direction: up|down>
 # ---------------------------------------------------------------------------
 if [ "$1" = "--swap" ]; then
-    source "$CURRENT_DIR/helpers.sh"
-    list_file=$(get_list_file)
+    resolve_harpoon_context
+    list_file="$H_LIST_FILE"
     slot="$2"
     direction="$3"
 
@@ -48,9 +49,8 @@ fi
 # Optional: --inner [initial_slot] to pre-select a line after swap
 # ---------------------------------------------------------------------------
 if [ "$1" = "--inner" ]; then
-    source "$CURRENT_DIR/helpers.sh"
-
-    list_file=$(get_list_file)
+    resolve_harpoon_context
+    list_file="$H_LIST_FILE"
     initial_slot="${2:-}"
 
     if [ ! -f "$list_file" ] || [ ! -s "$list_file" ]; then
@@ -83,7 +83,6 @@ if [ "$1" = "--inner" ]; then
             display_list="${display_list}${i}: ${session}:${window_name}${status_indicator}\n"
         done < "$list_file"
 
-        # Determine fzf starting position
         fzf_opts=(
             --reverse
             --ansi
@@ -94,10 +93,12 @@ if [ "$1" = "--inner" ]; then
             --color="header:italic"
         )
 
+        # After a swap, position the cursor on the moved entry so the user can
+        # see where it landed and chain another move. fzf's `pos(N)` action
+        # (available since v0.49) sets the initial cursor line; on older fzf
+        # versions this binding is silently ignored, which is harmless.
         if [ -n "$initial_slot" ]; then
-            fzf_opts+=(--query="" --nth=1 --header-first)
-            # Position cursor on the target slot line
-            fzf_opts+=(--scroll-off=0)
+            fzf_opts+=(--bind="start:pos($initial_slot)")
         fi
 
         selected=$(printf '%b' "$display_list" | grep -v '^$' | fzf "${fzf_opts[@]}")
@@ -113,42 +114,31 @@ if [ "$1" = "--inner" ]; then
 
         case "$key" in
             ctrl-k)
-                # Move slot up
                 if [ -n "$slot_num" ] && [ "$slot_num" -gt 1 ]; then
                     "$CURRENT_DIR/harpoon_picker.sh" --swap "$slot_num" up
                     initial_slot=$((slot_num - 1))
                 fi
-                # Loop: re-render
                 continue
                 ;;
             ctrl-j)
-                # Move slot down
                 total_lines=$(wc -l < "$list_file" | tr -d ' ')
                 if [ -n "$slot_num" ] && [ "$slot_num" -lt "$total_lines" ]; then
                     "$CURRENT_DIR/harpoon_picker.sh" --swap "$slot_num" down
                     initial_slot=$((slot_num + 1))
                 fi
-                # Loop: re-render
                 continue
                 ;;
             ctrl-d)
-                # Delete the selected slot
                 if [ -n "$slot_num" ]; then
-                    if [[ "$OSTYPE" == darwin* ]]; then
-                        sed -i '' "${slot_num}s|.*||" "$list_file"
-                    else
-                        sed -i "${slot_num}s|.*||" "$list_file"
-                    fi
+                    sed_inplace "${slot_num}s|.*||" "$list_file"
                     tmux display-message "Harpoon: removed slot $slot_num"
                 fi
                 exit 0
                 ;;
             ctrl-a)
-                # Add current window to next free slot
                 exec "$CURRENT_DIR/harpoon_add.sh"
                 ;;
             *)
-                # Jump to the selected slot
                 if [ -n "$slot_num" ]; then
                     exec "$CURRENT_DIR/harpoon_jump.sh" "$slot_num"
                 fi
@@ -169,16 +159,10 @@ PICKER_WIDTH="${PICKER_WIDTH:-60%}"
 PICKER_HEIGHT=$(tmux show-option -gqv "@harpoon-picker-height")
 PICKER_HEIGHT="${PICKER_HEIGHT:-40%}"
 
-# Check if fzf is available
+# Check if fzf is available (hard dependency — see README)
 if ! command -v fzf &>/dev/null; then
-    tmux display-message "Harpoon: fzf not found. Install fzf for the picker."
+    tmux display-message "Harpoon: fzf not found. fzf is a required dependency."
     exit 1
-fi
-
-# Check if tmux supports display-popup (tmux >= 3.2)
-if ! tmux list-commands 2>/dev/null | grep -q "^display-popup"; then
-    tmux display-message "Harpoon: tmux display-popup not available (need tmux >= 3.2). Falling back to menu."
-    exec "$CURRENT_DIR/harpoon_menu.sh"
 fi
 
 # Launch the popup with this script in --inner mode

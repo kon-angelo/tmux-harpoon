@@ -8,88 +8,80 @@
 # The window_id (@N) is a stable tmux identifier immune to renumber-windows.
 # ==============================================================================
 
-# Resolve the data directory
-HARPOON_DATA_DIR=$(tmux show-option -gqv "@harpoon-data-dir")
-HARPOON_DATA_DIR="${HARPOON_DATA_DIR:-$HOME/.local/share/tmux-harpoon}"
-
-# Resolve namespace mode: "git", "session", or "global"
-HARPOON_NAMESPACE=$(tmux show-option -gqv "@harpoon-namespace")
-HARPOON_NAMESPACE="${HARPOON_NAMESPACE:-session}"
-
 # ---------------------------------------------------------------------------
-# get_list_file — returns the path to the current harpoon list file
+# resolve_harpoon_context — batched lookup of everything we need from tmux
+#
+# Sets the following globals in one `tmux display-message` call:
+#   H_SESSION        current session name
+#   H_WINDOW_ID      stable window id (@N)
+#   H_WINDOW_NAME    current window name
+#   H_PANE_PATH      cwd of the current pane
+#   H_NAMESPACE      session | git | global  (defaults to "session")
+#   H_DATA_DIR       data dir (defaults to ~/.local/share/tmux-harpoon)
+#   H_LIST_FILE      resolved list file for the active namespace
+#   H_ENTRY          "session:@window_id:window_name" for the current window
+#
+# Every script needs at least H_LIST_FILE; add/jump need H_ENTRY too. Batching
+# saves 3-5 separate tmux roundtrips per keypress.
 # ---------------------------------------------------------------------------
-get_list_file() {
+resolve_harpoon_context() {
+    local _info
+    _info=$(tmux display-message -p \
+        '#S|#{window_id}|#W|#{pane_current_path}|#{@harpoon-namespace}|#{@harpoon-data-dir}')
+    IFS='|' read -r H_SESSION H_WINDOW_ID H_WINDOW_NAME H_PANE_PATH H_NAMESPACE H_DATA_DIR <<< "$_info"
+
+    H_NAMESPACE="${H_NAMESPACE:-session}"
+    H_DATA_DIR="${H_DATA_DIR:-$HOME/.local/share/tmux-harpoon}"
+    H_ENTRY="${H_SESSION}:${H_WINDOW_ID}:${H_WINDOW_NAME}"
+
     local ns_key
-
-    case "$HARPOON_NAMESPACE" in
+    case "$H_NAMESPACE" in
         git)
-            # Use git repo root as namespace key (sanitized)
-            local pane_path
-            pane_path=$(tmux display-message -p '#{pane_current_path}')
             local git_root
-            git_root=$(cd "$pane_path" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
+            git_root=$(cd "$H_PANE_PATH" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)
             if [ -n "$git_root" ]; then
                 ns_key=$(echo "$git_root" | tr '/' '_' | sed 's/^_//')
             else
-                # Fallback to session name if not in a git repo
-                ns_key=$(tmux display-message -p '#S')
+                ns_key="$H_SESSION"
             fi
             ;;
         global)
             ns_key="global"
             ;;
         session|*)
-            ns_key=$(tmux display-message -p '#S')
+            ns_key="$H_SESSION"
             ;;
     esac
 
     # Sanitize: replace problematic characters
     ns_key=$(echo "$ns_key" | tr ' /:' '___')
-
-    echo "${HARPOON_DATA_DIR}/${ns_key}.list"
+    H_LIST_FILE="${H_DATA_DIR}/${ns_key}.list"
 }
 
 # ---------------------------------------------------------------------------
-# ensure_list_file — create the list file if it doesn't exist
+# ensure_list_file — create the list file (and its parent dir) if missing
+# Requires resolve_harpoon_context to have run.
 # ---------------------------------------------------------------------------
 ensure_list_file() {
-    local list_file
-    list_file=$(get_list_file)
-    mkdir -p "$(dirname "$list_file")"
-    touch "$list_file"
-    echo "$list_file"
+    mkdir -p "$(dirname "$H_LIST_FILE")"
+    [ -f "$H_LIST_FILE" ] || touch "$H_LIST_FILE"
 }
 
 # ---------------------------------------------------------------------------
-# get_entry_count — returns the number of entries in the list
+# get_entry_count — number of entries in the active list
 # ---------------------------------------------------------------------------
 get_entry_count() {
-    local list_file
-    list_file=$(get_list_file)
-    if [ -f "$list_file" ]; then
-        wc -l < "$list_file" | tr -d ' '
+    if [ -f "$H_LIST_FILE" ]; then
+        wc -l < "$H_LIST_FILE" | tr -d ' '
     else
         echo "0"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# current_window_entry — returns the entry for the current window
-# Format: session_name:@window_id:window_name
-# ---------------------------------------------------------------------------
-current_window_entry() {
-    local session window_id window_name
-    session=$(tmux display-message -p '#S')
-    window_id=$(tmux display-message -p '#{window_id}')
-    window_name=$(tmux display-message -p '#W')
-    echo "${session}:${window_id}:${window_name}"
-}
-
-# ---------------------------------------------------------------------------
 # validate_entry — check if a harpooned entry still exists
-# Returns 0 if valid, 1 if stale
-# Validates session exists and window_id exists in that session.
+# Returns 0 if valid, 1 if stale.
+# Validates that the session exists and window_id exists in that session.
 # Window IDs are stable — if the ID exists, the window is the same one.
 # ---------------------------------------------------------------------------
 validate_entry() {
@@ -99,12 +91,10 @@ validate_entry() {
     session=$(echo "$entry" | cut -d: -f1)
     window_id=$(echo "$entry" | cut -d: -f2)
 
-    # Check if the session exists
     if ! tmux has-session -t "$session" 2>/dev/null; then
         return 1
     fi
 
-    # Check if the window_id exists in that session
     if ! tmux list-windows -t "$session" -F '#{window_id}' 2>/dev/null | grep -q "^${window_id}$"; then
         return 1
     fi
@@ -117,4 +107,16 @@ validate_entry() {
 # ---------------------------------------------------------------------------
 display_message() {
     tmux display-message "$1"
+}
+
+# ---------------------------------------------------------------------------
+# sed_inplace — portable in-place sed (BSD vs GNU)
+# Usage: sed_inplace <expression> <file>
+# ---------------------------------------------------------------------------
+sed_inplace() {
+    if [[ "$OSTYPE" == darwin* ]]; then
+        sed -i '' "$1" "$2"
+    else
+        sed -i "$1" "$2"
+    fi
 }

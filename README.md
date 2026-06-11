@@ -34,8 +34,7 @@ run-shell '/path/to/tmux-harpoon/tmux-harpoon.tmux'
 |---|---|
 | `prefix + H` | Harpoon (bookmark) current window to next free slot |
 | `prefix + M-1` to `prefix + M-9` | Jump to slot 1–9 |
-| `prefix + C-e` | Open interactive harpoon menu (inline fzf) |
-| `prefix + C-f` | Open fzf picker in a floating popup (tmux >= 3.2) |
+| `prefix + C-f` | Open fzf picker in a floating popup |
 | `prefix + C-h` | Clear all harpoons |
 
 ### Quick Keys (no prefix required)
@@ -47,19 +46,14 @@ These are enabled by default (`@harpoon-quick-jump on`) for slots 1–5:
 | `Alt+1` to `Alt+5` | Jump to slot 1–5 |
 | `Shift+Alt+1` to `Shift+Alt+5` | Pin current window to slot 1–5 |
 
-### Menu Controls (fzf)
-
-- `Enter` — jump to selected entry
-- `Ctrl-D` — delete selected entry
-- `Esc` — close menu
-
-### Picker Controls (fzf popup)
+### Picker Controls
 
 The picker (`prefix + C-f`) opens fzf inside a floating tmux popup:
 
 - `Enter` — jump to selected entry
 - `Ctrl-D` — delete selected entry
 - `Ctrl-A` — add current window to next free slot
+- `Ctrl-K` / `Ctrl-J` — move selected entry up / down
 - `Esc` — close picker
 
 ## Configuration
@@ -69,7 +63,6 @@ All options are set via tmux options (before TPM loads the plugin):
 ```bash
 # Key bindings (prefix-based)
 set -g @harpoon-add-key 'H'         # Key to add current window
-set -g @harpoon-menu-key 'C-e'      # Key to open inline menu
 set -g @harpoon-picker-key 'C-f'    # Key to open fzf popup picker
 set -g @harpoon-clear-key 'C-h'     # Key to clear all
 set -g @harpoon-jump-prefix 'M-'    # Prefix for slot keys (M-1..M-9)
@@ -117,10 +110,10 @@ This displays something like: `[1:vim 2:logs 3:tests]`
 
 ## Dependencies
 
-- `tmux` (obviously)
-- `fzf` (optional, for the interactive menu and popup picker; falls back to `tmux display-menu`)
-- `tmux >= 3.2` (optional, for the floating popup picker; falls back to inline menu)
-- Standard POSIX tools: `bash`, `sed`, `grep`, `cut`, `wc`
+- `tmux` >= 3.2 (for `display-popup`)
+- `fzf` >= 0.49 (for the picker UI; `pos()` action used for cursor positioning)
+- `bash` >= 4 (uses `mapfile`)
+- Standard POSIX tools: `sed`, `grep`, `cut`, `wc`
 
 ## File Structure
 
@@ -131,8 +124,7 @@ tmux-harpoon/
 │   ├── helpers.sh             # Shared utility functions
 │   ├── harpoon_add.sh         # Add current window to list
 │   ├── harpoon_jump.sh        # Jump to slot N
-│   ├── harpoon_menu.sh        # Interactive inline fzf menu
-│   ├── harpoon_picker.sh      # fzf popup picker (tmux display-popup)
+│   ├── harpoon_picker.sh      # fzf popup picker (jump/add/delete/reorder)
 │   ├── harpoon_clear.sh       # Clear all entries
 │   └── harpoon_status.sh      # Status bar segment
 └── README.md

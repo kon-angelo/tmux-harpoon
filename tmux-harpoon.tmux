@@ -37,9 +37,9 @@ HARPOON_PICKER_KEY=$(get_tmux_option "@harpoon-picker-key" "C-f")
 # Jump keys (with prefix): prefix + Alt-1..9 (default) — avoids conflicting with tmux's prefix+1..9 window select
 HARPOON_JUMP_PREFIX=$(get_tmux_option "@harpoon-jump-prefix" "M-")
 
-# No-prefix quick keys: M-1..M-5 to jump, M-S-1..M-S-5 (M-! etc.) to pin
+# No-prefix quick keys: M-1..M-9 to jump, M-S-1..M-S-9 (M-! etc.) to pin
 HARPOON_QUICK_JUMP=$(get_tmux_option "@harpoon-quick-jump" "on")
-HARPOON_QUICK_SLOTS=$(get_tmux_option "@harpoon-quick-slots" "5")
+HARPOON_QUICK_SLOTS=$(get_tmux_option "@harpoon-quick-slots" "9")
 
 # Data directory
 HARPOON_DATA_DIR=$(get_tmux_option "@harpoon-data-dir" "$HOME/.local/share/tmux-harpoon")
@@ -71,7 +71,7 @@ tmux bind-key "$HARPOON_PICKER_KEY" run-shell "$SCRIPTS_DIR/harpoon_picker.sh"
 tmux bind-key "$HARPOON_CLEAR_KEY" run-shell "$SCRIPTS_DIR/harpoon_clear.sh"
 
 # ---------------------------------------------------------------------------
-# No-prefix quick keys (M-1..5 to jump, M-S-1..5 to pin)
+# No-prefix quick keys (M-1..9 to jump, M-S-1..9 to pin)
 # ---------------------------------------------------------------------------
 if [ "$HARPOON_QUICK_JUMP" = "on" ]; then
     # Shift+Alt+digit produces three different canonical names depending on

@@ -39,12 +39,12 @@ run-shell '/path/to/tmux-harpoon/tmux-harpoon.tmux'
 
 ### Quick Keys (no prefix required)
 
-These are enabled by default (`@harpoon-quick-jump on`) for slots 1–5:
+These are enabled by default (`@harpoon-quick-jump on`) for slots 1–9:
 
 | Keybinding | Action |
 |---|---|
-| `Alt+1` to `Alt+5` | Jump to slot 1–5 |
-| `Shift+Alt+1` to `Shift+Alt+5` | Pin current window to slot 1–5 |
+| `Alt+1` to `Alt+9` | Jump to slot 1–9 |
+| `Shift+Alt+1` to `Shift+Alt+9` | Pin current window to slot 1–9 |
 
 ### Picker Controls
 
@@ -68,8 +68,8 @@ set -g @harpoon-clear-key 'C-h'     # Key to clear all
 set -g @harpoon-jump-prefix 'M-'    # Prefix for slot keys (M-1..M-9)
 
 # Quick keys (no prefix, on by default)
-set -g @harpoon-quick-jump 'on'     # Enable M-1..5 jump, M-S-1..5 pin
-set -g @harpoon-quick-slots '5'     # Number of quick slots (1-9)
+set -g @harpoon-quick-jump 'on'     # Enable M-1..9 jump, M-S-1..9 pin
+set -g @harpoon-quick-slots '9'     # Number of quick slots (1-9)
 
 # Picker popup dimensions
 set -g @harpoon-picker-width '60%'  # Popup width (default: 60%)

@@ -51,6 +51,7 @@ These are enabled by default (`@harpoon-quick-jump on`) for slots 1–9:
 The picker (`prefix + C-f`) opens fzf inside a floating tmux popup:
 
 - `Enter` — jump to selected entry
+- `Alt-1` … `Alt-9` — quick-pick: jump to the Nth visible entry without moving the cursor
 - `Ctrl-D` — delete selected entry
 - `Ctrl-A` — add current window to next free slot
 - `Ctrl-K` / `Ctrl-J` — move selected entry up / down

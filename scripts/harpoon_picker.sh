@@ -86,11 +86,23 @@ if [ "$1" = "--inner" ]; then
         fzf_opts=(
             --reverse
             --ansi
-            --header="Enter=jump  C-d=delete  C-a=add  C-k/C-j=move up/down  Esc=close"
+            --header="Enter=jump  Alt-1..9=quick-pick  C-d=delete  C-a=add  C-k/C-j=move up/down  Esc=close"
             --prompt="  "
             --expect="ctrl-d,ctrl-a,ctrl-k,ctrl-j"
             --no-multi
             --color="header:italic"
+            # Alt+N quick-pick: jump to the Nth visible entry and accept.
+            # Same effect as moving the cursor to that line and pressing Enter,
+            # so the wrapper handles it as a normal selection (no expect key).
+            --bind="alt-1:pos(1)+accept"
+            --bind="alt-2:pos(2)+accept"
+            --bind="alt-3:pos(3)+accept"
+            --bind="alt-4:pos(4)+accept"
+            --bind="alt-5:pos(5)+accept"
+            --bind="alt-6:pos(6)+accept"
+            --bind="alt-7:pos(7)+accept"
+            --bind="alt-8:pos(8)+accept"
+            --bind="alt-9:pos(9)+accept"
         )
 
         # After a swap, position the cursor on the moved entry so the user can
